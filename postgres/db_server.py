@@ -16,9 +16,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_database, initialize_database
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
-from models import SqlQuery, ChatSession, Conversation
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 
@@ -36,69 +33,6 @@ initialize_database(
     password=os.getenv("POSTGRES_PASSWORD"),
 )
 db = get_database()
-
-# Create SQLite engine for storing SQL queries
-sqlite_engine = create_engine("sqlite:///chat_app.db", echo=False)
-SqlSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sqlite_engine)
-
-def store_sql_query_in_main_db(
-    query: str,
-    query_type: str = None,
-    execution_time: float = None,
-    rows_affected: int = None,
-    status: str = "SUCCESS",
-    error_message: str = None,
-    session_id: int = None,
-    conversation_id: int = None,
-    user_id: str = None
-) -> int:
-    """Store SQL query in the main SQLite database"""
-    db_session = SqlSessionLocal()
-    try:
-        # Determine query type if not provided
-        if not query_type:
-            query_upper = query.strip().upper()
-            if query_upper.startswith('SELECT'):
-                query_type = 'SELECT'
-            elif query_upper.startswith('INSERT'):
-                query_type = 'INSERT'
-            elif query_upper.startswith('UPDATE'):
-                query_type = 'UPDATE'
-            elif query_upper.startswith('DELETE'):
-                query_type = 'DELETE'
-            elif query_upper.startswith('CREATE'):
-                query_type = 'CREATE'
-            elif query_upper.startswith('DROP'):
-                query_type = 'DROP'
-            elif query_upper.startswith('ALTER'):
-                query_type = 'ALTER'
-            else:
-                query_type = 'OTHER'
-        
-        sql_query = SqlQuery(
-            query=query,
-            query_type=query_type,
-            execution_time=execution_time,
-            rows_affected=rows_affected,
-            status=status,
-            error_message=error_message,
-            session_id=session_id,
-            conversation_id=conversation_id,
-            user_id=user_id
-        )
-        
-        db_session.add(sql_query)
-        db_session.commit()
-        
-        logger.info(f"Stored SQL query in main DB: {query[:100]}... (ID: {sql_query.id})")
-        return sql_query.id
-        
-    except Exception as e:
-        logger.error(f"Error storing SQL query in main DB: {e}")
-        db_session.rollback()
-        raise
-    finally:
-        db_session.close()
 
 
 @mcp.resource(name="database_schema", uri="db://schema")
@@ -151,15 +85,21 @@ def table_list():
 
 
 @mcp.tool(name="execute_sql")
-def execute_sql(query: str) -> str:
+def execute_sql(query: str, session_id: int, conversation_id: int, user_id: str = None) -> str:
     """Execute a SQL query on the database.
 
     Args:
         query: The SQL query to execute
+        session_id: The session ID
+        conversation_id: The conversation ID
+        user_id: The user ID
 
     Returns:
         JSON string containing the query results
     """
+    logger.info("1111111111111session_id: ", session_id)
+    logger.info("2222222222222222conversation_id: ", conversation_id)
+    logger.info("33333333333333333333333333333user_id: ", user_id)
     if not query or not query.strip():
         raise ValueError("Query cannot be empty")
 
@@ -183,20 +123,6 @@ def execute_sql(query: str) -> str:
         output_response["query"] = query
         output_response["results"] = results
         
-        # Store the SQL query in the main database
-        try:
-            store_sql_query_in_main_db(
-                query=query,
-                query_type="SELECT",
-                execution_time=execution_time,
-                rows_affected=rows_affected,
-                status=status,
-                error_message=error_message
-            )
-        except Exception as store_error:
-            logger.error(f"Failed to store SQL query in main DB: {store_error}")
-            # Don't fail the main query if storage fails
-        
         return json.dumps(output_response, default=str)
     except Exception as e:
         execution_time = time.time() - start_time
@@ -204,21 +130,6 @@ def execute_sql(query: str) -> str:
         error_message = str(e)
         
         logger.error(f"Query execution failed: {e}")
-        
-        # Store the failed SQL query in the main database
-        try:
-            store_sql_query_in_main_db(
-                query=query,
-                query_type="SELECT",
-                execution_time=execution_time,
-                rows_affected=0,
-                status=status,
-                error_message=error_message
-            )
-        except Exception as store_error:
-            logger.error(f"Failed to store failed SQL query in main DB: {store_error}")
-        
-        raise
 
 
 if __name__ == "__main__":

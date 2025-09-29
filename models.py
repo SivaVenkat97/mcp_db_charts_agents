@@ -67,34 +67,34 @@ class DashboardAsset(Base):
 
 
 
-# Create DB
-engine = create_engine("sqlite:///chat_app.db", echo=True)
-Base.metadata.create_all(engine)
+# # Create DB
+# engine = create_engine("sqlite:///chat_app.db", echo=True)
+# Base.metadata.create_all(engine)
 
-# Create session
-Session = sessionmaker(bind=engine)
-session = Session()
+# # Create session
+# Session = sessionmaker(bind=engine)
+# session = Session()
 
-# Insert sample data
-chat_session = ChatSession()
-session.add(chat_session)
-session.commit()
+# # Insert sample data
+# chat_session = ChatSession()
+# session.add(chat_session)
+# session.commit()
 
-conversation = Conversation(question="What is AI?", response="AI is Artificial Intelligence", session_id=chat_session.id)
-session.add(conversation)
-session.commit()
+# conversation = Conversation(question="What is AI?", response="AI is Artificial Intelligence", session_id=chat_session.id)
+# session.add(conversation)
+# session.commit()
 
-asset = Asset(title="AI Diagram", path="/assets/ai_diagram.png", width=800, height=600,
-              aspect_ratio=800/600, session_id=chat_session.id, conversation_id=conversation.id)
-session.add(asset)
-session.commit()
+# asset = Asset(title="AI Diagram", path="/assets/ai_diagram.png", width=800, height=600,
+#               aspect_ratio=800/600, session_id=chat_session.id, conversation_id=conversation.id)
+# session.add(asset)
+# session.commit()
 
-dashboard = Dashboard(title="AI Dashboard")
-session.add(dashboard)
-session.commit()
+# dashboard = Dashboard(title="AI Dashboard")
+# session.add(dashboard)
+# session.commit()
 
-dashboard_asset = DashboardAsset(asset_id=asset.id, dashboard_id=dashboard.id)
-session.add(dashboard_asset)
-session.commit()
+# dashboard_asset = DashboardAsset(asset_id=asset.id, dashboard_id=dashboard.id)
+# session.add(dashboard_asset)
+# session.commit()
 
-print("All entries created successfully!")
+# print("All entries created successfully!")

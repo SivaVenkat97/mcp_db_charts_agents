@@ -6,7 +6,7 @@ Converts the MCP client into streamable HTTP endpoints
 import asyncio
 import os
 import json
-import logging
+# import logging
 import re
 import uvicorn
 import traceback
@@ -27,7 +27,7 @@ from PIL import Image
 from request_response import QueryRequest, ErrorDetail, SuccessResponse, ErrorResponse, Item
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base, ChatSession, Conversation, Asset, Dashboard, DashboardAsset, conversation
+from models import Base, ChatSession, Conversation, Asset, Dashboard, DashboardAsset
 
 # Create logs folder if it doesn't exist
 log_folder = "logs"
@@ -38,39 +38,39 @@ log_filename = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.log")
 log_path = os.path.join(log_folder, log_filename)
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,  # can be DEBUG, INFO, WARNING, ERROR, CRITICAL
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(log_path),  # write to file
-        logging.StreamHandler()         # also print to console
-    ]
-)
+# logging.basicConfig(
+#     level=logging.INFO,  # can be DEBUG, INFO, WARNING, ERROR, CRITICAL
+#     format="%(asctime)s - %(levelname)s - %(message)s",
+#     handlers=[
+#         logging.FileHandler(log_path),  # write to file
+#         logging.StreamHandler()         # also print to console
+#     ]
+# )
 
 # Configure uvicorn logger to be less verbose
 # logging.getLogger("uvicorn").setLevel(logging.WARNING)
 # logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 # logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # logging.getLogger("uvicorn.lifespan").setLevel(logging.WARNING)
-logging.getLogger("uvicorn.reload").setLevel(logging.DEBUG)
+# logging.getLogger("uvicorn.reload").setLevel(logging.DEBUG)
 # logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
 # Add a custom filter to block file watcher messages
-class FileWatcherFilter(logging.Filter):
-    def filter(self, record):
-        # Block messages containing "change detected" or from watchfiles
-        message = record.getMessage()
-        return not ("change detected" in message or "watchfiles" in record.name)
+# class FileWatcherFilter(logging.Filter):
+#     def filter(self, record):
+#         # Block messages containing "change detected" or from watchfiles
+#         message = record.getMessage()
+#         return not ("change detected" in message or "watchfiles" in record.name)
 
 # Apply the filter to the root logger and specific loggers
-root_logger = logging.getLogger()
-root_logger.addFilter(FileWatcherFilter())
+# root_logger = logging.getLogger()
+# root_logger.addFilter(FileWatcherFilter())
 
 # Also apply to uvicorn and watchfiles loggers specifically
-logging.getLogger("uvicorn.reload").addFilter(FileWatcherFilter())
-logging.getLogger("watchfiles").addFilter(FileWatcherFilter())
+# logging.getLogger("uvicorn.reload").addFilter(FileWatcherFilter())
+# logging.getLogger("watchfiles").addFilter(FileWatcherFilter())
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 # Global variables for MCP client and agent
 mcp_client = None
@@ -90,16 +90,16 @@ async def lifespan(app: FastAPI):
     global mcp_client, mcp_agent
     
     try:
-        logger.debug("Initializing MCP client and agent...")
+        print("Initializing MCP client and agent...")
         await create_mcp_client_and_agent()
         
         yield
         
     except Exception as e:
-        logger.error(f"Failed to initialize MCP client/agent: {e}")
+        print(f"Failed to initialize MCP client/agent: {e}")
         raise
     finally:
-        logger.debug("Shutting down MCP client...")
+        print("Shutting down MCP client...")
 
 # Create FastAPI app
 app = FastAPI(
@@ -194,7 +194,7 @@ async def get_chat_sessions():
         )
         
     except Exception as e:
-        logger.error(f"Error creating chat session: {e}")
+        print(f"Error creating chat session: {e}")
         return ErrorResponse(
             error=ErrorDetail(
                 code="SESSION_CREATION_FAILED",
@@ -262,7 +262,7 @@ async def get_chat_sessions():
 #         )
         
 #     except Exception as e:
-#         logger.error(f"Error processing conversation: {e}")
+#         print(f"Error processing conversation: {e}")
 #         return ErrorResponse(
 #             error=ErrorDetail(
 #                 code="CONVERSATION_PROCESSING_FAILED",
@@ -275,7 +275,7 @@ async def create_mcp_client_and_agent():
     global mcp_client, mcp_agent
     
     try:
-        logger.debug("Creating new MCP client and agent...")
+        print("Creating new MCP client and agent...")
         
         # Initialize MCP client with configuration
         config = {
@@ -298,7 +298,7 @@ async def create_mcp_client_and_agent():
         }
         
         mcp_client = MCPClient.from_dict(config)
-        logger.debug("MCP Client created successfully")
+        print("MCP Client created successfully")
         
         # Initialize LLM
         llm = ChatOpenAI(
@@ -382,14 +382,21 @@ async def create_mcp_client_and_agent():
         - Query: "sales data for Q4" → Title: "sales data for Q4_pie chart", Filename: "sales_data_for_q4_pie_chart.png"
         - Query: "employee performance metrics" → Title: "employee performance metrics_scatter chart", Filename: "employee_performance_metrics_scatter_chart.png"
 
+        SQL Tool Usage:
+        - When calling execute_sql, if the user query includes session_id and conversation_id, include them in a leading SQL comment so the server can log them. Use exactly this format at the very beginning of the SQL (replace the numbers with the actual IDs):
+          /* session_id: 12, conversation_id: 34 */
+          Then write the SELECT statement on the next line. Example:
+          /* session_id: 12, conversation_id: 34 */
+          SELECT * FROM users LIMIT 5;
         """
 
         
         mcp_agent = MCPAgent(llm=llm, client=mcp_client, max_steps=2, system_prompt=system_rules)
-        logger.debug("MCP Agent created successfully")
+        print("MCP Agent created successfully")
+        print("mcp_agent: ", mcp_agent)
         
     except Exception as e:
-        logger.error(f"Failed to create MCP client/agent: {e}")
+        print(f"Failed to create MCP client/agent: {e}")
         raise
 
 def extract_chart_paths_from_result(result: Any) -> list:
@@ -482,7 +489,7 @@ async def get_chart_files_from_media() -> list:
                                 else:
                                     aspect_ratio = "1:1"
                         except Exception as img_error:
-                            logger.warning(f"Could not get image dimensions for {file}: {img_error}")
+                            print(f"Could not get image dimensions for {file}: {img_error}")
                             width, height = 0, 0
                             aspect_ratio = "1:1"
                         
@@ -495,38 +502,39 @@ async def get_chart_files_from_media() -> list:
                             "height": f"{height}px"
                         })
     except Exception as e:
-        logger.error(f"Error getting chart files: {e}")
+        print(f"Error getting chart files: {e}")
     
     # Sort by filename
     return sorted(chart_info, key=lambda x: x["path"])
 
-async def run_mcp_query(query: str, user_id: Optional[str] = None, max_steps: int = 10, session_id: int = None, conversation_id: int = None) -> tuple[Any, list]:
+async def run_mcp_query(
+        query: str,
+        max_steps: int = 10,
+        user_id: Optional[str] = None,
+        session_id: Optional[int] = 0,
+        conversation_id: Optional[int] = 0
+    ) -> tuple[Any, list]:
+
     """Run MCP query and return result along with chart paths"""
 
-    print("------------------------1")
-    
-    # logger.debug("------------------------1")
-    # logger.debug("session_id11: ", session_id)
-    # logger.debug("conversation_id11: ", conversation_id)
-    # logger.debug("------------------------2")
-    # return False
-
-    global mcp_agent
-    
-    # Format user query
-    if user_id:
-        user_query = f"{query} for user_id '{user_id}'"
-
-    else:
-        user_query = query
-    
-    logger.debug(f"Running MCP query: {user_query}")
-
-
-
-    
-    
     try:
+
+        print("------------------------1")
+        print("session_id11: ", session_id)
+        print("conversation_id11: ", conversation_id)
+        print("------------------------2")
+
+
+        global mcp_agent
+        
+        # Format user query
+        if user_id:
+            user_query = f"{query} for user_id '{user_id}'"
+        else:
+            user_query = f"{query}, session_id: {session_id}, conversation_id: {conversation_id}"
+        
+        print(f"Running MCP query: {user_query}")
+
         # Get chart files before execution
         charts_before = await get_chart_files_from_media()
 
@@ -537,9 +545,9 @@ async def run_mcp_query(query: str, user_id: Optional[str] = None, max_steps: in
         result = await mcp_agent.run(user_query, max_steps=max_steps)
 
 
-        logger.debug("="*100)
-        logger.debug(f"Result: {result}")
-        logger.debug("="*100)
+        print("="*100)
+        print(f"Result: {result}")
+        print("="*100)
         
         # Get chart files after execution
         charts_after = await get_chart_files_from_media()
@@ -554,10 +562,10 @@ async def run_mcp_query(query: str, user_id: Optional[str] = None, max_steps: in
 
         return result, new_charts
     except Exception as e:
-        logger.error(f"MCP query failed: {e}")
+        print(f"MCP query failed: {e}")
         # Try to recreate client and agent once more
         try:
-            logger.debug("Attempting to recreate MCP client and agent...")
+            print("Attempting to recreate MCP client and agent...")
             await create_mcp_client_and_agent()
             
             # Get chart files before retry
@@ -577,134 +585,98 @@ async def run_mcp_query(query: str, user_id: Optional[str] = None, max_steps: in
             
             return result, new_charts
         except Exception as retry_e:
-            logger.error(f"MCP query retry failed: {retry_e}")
-            raise HTTPException(
-                status_code=500, 
-                detail={
-                    "status": False,
-                    "error": {
-                        "code": "QUERY_EXECUTION_FAILED",
-                        "message": f"Query execution failed: {str(retry_e)}"
-                    }
-                }
-            )
+            raise retry_e
+            # print(f"MCP query retry failed: {retry_e}")
+            # raise HTTPException(
+            #     status_code=500, 
+            #     detail={
+            #         "status": False,
+            #         "error": {
+            #             "code": "QUERY_EXECUTION_FAILED",
+            #             "message": f"Query execution failed: {str(retry_e)}"
+            #         }
+            #     }
+            # )
 
-@app.post("/query")
-async def query_mcp(request: QueryRequest):
-    """Execute MCP query and return result"""
-    try:
-        result, chart_paths = await run_mcp_query(
-            query=request.query,
-            user_id=request.user_id,
-            max_steps=request.max_steps
-        )
-        
-        return SuccessResponse(
-            message="Query executed successfully",
-            data={
-                "result": result,
-                "chart_list": chart_paths
-            }
-        )
-        
-    except HTTPException as e:
-        # Extract error details from HTTPException
-        error_detail = e.detail
-        if isinstance(error_detail, dict) and "error" in error_detail:
-            return ErrorResponse(error=ErrorDetail(**error_detail["error"]))
-        else:
-            return ErrorResponse(
-                error=ErrorDetail(
-                    code="QUERY_EXECUTION_FAILED",
-                    message=str(error_detail)
-                )
-            )
-    except Exception as e:
-        logger.error(f"Unexpected error in query endpoint: {e}")
-        return ErrorResponse(
-            error=ErrorDetail(
-                code="INTERNAL_SERVER_ERROR",
-                message=f"Unexpected error: {str(e)}"
-            )
-        )
+
 
 @app.post("/conversations")
 async def create_conversation(request: Request):
     """Create a new conversation with session_id and question"""
     try:
-        # Parse JSON payload
-        try:
-            payload = await request.json()
-        except json.JSONDecodeError as json_error:
-            logger.error(f"Invalid JSON in request body: {json_error}")
-            return ErrorResponse(
-                error=ErrorDetail(
-                    code="INVALID_JSON",
-                    message="Invalid JSON payload. Please check the request body format."
-                )
-            )
+        # # Parse JSON payload
+        # try:
+        #     payload = await request.json()
+        # except json.JSONDecodeError as json_error:
+        #     print(f"Invalid JSON in request body: {json_error}")
+        #     return ErrorResponse(
+        #         error=ErrorDetail(
+        #             code="INVALID_JSON",
+        #             message="Invalid JSON payload. Please check the request body format."
+        #         )
+        #     )
         
-        # Validate required fields
-        if "session_id" not in payload:
-            return ErrorResponse(
-                error=ErrorDetail(
-                    code="MISSING_SESSION_ID",
-                    message="session_id is required in the payload"
-                )
-            )
+        # # Validate required fields
+        # if "session_id" not in payload:
+        #     return ErrorResponse(
+        #         error=ErrorDetail(
+        #             code="MISSING_SESSION_ID",
+        #             message="session_id is required in the payload"
+        #         )
+        #     )
         
-        if "question" not in payload:
-            return ErrorResponse(
-                error=ErrorDetail(
-                    code="MISSING_QUESTION",
-                    message="question is required in the payload"
-                )
-            )
-        
+        # if "question" not in payload:
+        #     return ErrorResponse(
+        #         error=ErrorDetail(
+        #             code="MISSING_QUESTION",
+        #             message="question is required in the payload"
+        #         )
+        #     )
+        payload = await request.json()
         session_id = payload["session_id"]
         question = payload["question"]
         
-        # Validate question is a string type
-        if not isinstance(question, str):
-            return ErrorResponse(
-                error=ErrorDetail(
-                    code="INVALID_QUESTION_TYPE",
-                    message="please check the question type"
-                )
-            )
+        # # Validate question is a string type
+        # if not isinstance(question, str):
+        #     return ErrorResponse(
+        #         error=ErrorDetail(
+        #             code="INVALID_QUESTION_TYPE",
+        #             message="please check the question type"
+        #         )
+        #     )
         
-        # Validate question is not empty
-        if not question or not question.strip():
-            return ErrorResponse(
-                error=ErrorDetail(
-                    code="EMPTY_QUESTION",
-                    message="please provide the question"
-                )
-            )
+        # # Validate question is not empty
+        # if not question or not question.strip():
+        #     return ErrorResponse(
+        #         error=ErrorDetail(
+        #             code="EMPTY_QUESTION",
+        #             message="please provide the question"
+        #         )
+        #     )
         
         # Validate session_id exists in database
         db = SessionLocal()
-        try:
-            chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-            if not chat_session:
-                return ErrorResponse(
-                    error=ErrorDetail(
-                        code="SESSION_NOT_FOUND",
-                        message=f"Chat session with ID {session_id} not found"
-                    )
+        print("111111111111")
+        chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not chat_session:
+            return ErrorResponse(
+                error=ErrorDetail(
+                    code="SESSION_NOT_FOUND",
+                    message=f"Chat session with ID {session_id} not found"
                 )
-            
-        finally:
-            db.close()
+            )
+        print("222222222222")
         
         # Get optional parameters
         user_id = payload.get("user_id")
         max_steps = payload.get("max_steps", 10)
+        print("333333333333")
 
-        # conversation_obj = Conversation(session_id=session_id)
-        # db.add(conversation_obj)
-        # db.commit()
-
+        conversation_obj = Conversation(session_id=session_id)
+        db.add(conversation_obj)
+        db.commit()
+        print("conversation_obj: ", conversation_obj.id)
+        print("444444444444")
       
         async def generate_stream():
             try:
@@ -714,6 +686,8 @@ async def create_conversation(request: Request):
                     data={"timestamp": datetime.now().isoformat()}
                 )
                 yield f"data: {status_response.model_dump_json()}\n\n"
+
+                print("555555555555", conversation_obj.id)
                 
                 # Execute conversation
                 result, chart_paths = await run_mcp_query(
@@ -723,9 +697,10 @@ async def create_conversation(request: Request):
                     session_id=session_id,
                     conversation_id=conversation_obj.id
                 )
-                
+                print("666666666666")
                 # Store conversation and assets in database
                 db = SessionLocal()
+                print("777777777777")
                 try:
                     # Create conversation record
                     conversation = Conversation(
@@ -735,7 +710,7 @@ async def create_conversation(request: Request):
                     )
                     db.add(conversation)
                     db.commit()
-                    
+                    print("888888888888")
                     # Store assets (charts) in database
                     for chart in chart_paths:
                         # Extract title from path
@@ -760,7 +735,7 @@ async def create_conversation(request: Request):
                                     aspect_ratio = float(width) / float(height)
                                     
                             except (ValueError, ZeroDivisionError) as e:
-                                logger.warning(f"Error parsing dimensions for {chart['path']}: {e}")
+                                print(f"Error parsing dimensions for {chart['path']}: {e}")
                                 width = None
                                 height = None
                                 aspect_ratio = None
@@ -777,7 +752,7 @@ async def create_conversation(request: Request):
                                         if h_ratio > 0:
                                             aspect_ratio = float(w_ratio) / float(h_ratio)
                             except (ValueError, ZeroDivisionError) as e:
-                                logger.warning(f"Error parsing aspect ratio '{chart.get('aspect_ratio')}' for {chart['path']}: {e}")
+                                print(f"Error parsing aspect ratio '{chart.get('aspect_ratio')}' for {chart['path']}: {e}")
                                 aspect_ratio = None
                         
                         # Create asset record
@@ -797,7 +772,7 @@ async def create_conversation(request: Request):
                     db.commit()
                     
                 except Exception as db_error:
-                    logger.error(f"Database error: {db_error}")
+                    print(f"Database error: {db_error}")
                     db.rollback()
                 finally:
                     db.close()
@@ -828,7 +803,7 @@ async def create_conversation(request: Request):
                     )
                 yield f"data: {error_response.model_dump_json()}\n\n"
             except Exception as e:
-                logger.error(f"Stream error: {e}")
+                print(f"Stream error: {e}")
                 error_response = ErrorResponse(
                     error=ErrorDetail(
                         code="INTERNAL_SERVER_ERROR",
@@ -849,7 +824,7 @@ async def create_conversation(request: Request):
         )
                                                                                                             
     except Exception as e:
-        logger.error(f"Error creating conversation: {traceback.format_exc()}")
+        print(f"Error creating conversation: {traceback.format_exc()}")
         return ErrorResponse(
             error=ErrorDetail(
                 code="CONVERSATION_CREATION_FAILED",
@@ -900,7 +875,7 @@ async def create_dashboard(request: Request):
                 }
             )
         except Exception as db_error:
-            logger.error(f"Database error creating dashboard: {db_error}")
+            print(f"Database error creating dashboard: {db_error}")
             db.rollback()
             return ErrorResponse(
                 error=ErrorDetail(
@@ -919,7 +894,7 @@ async def create_dashboard(request: Request):
             )
         )
     except Exception as e:
-        logger.error(f"Error creating dashboard: {e}")
+        print(f"Error creating dashboard: {e}")
         return ErrorResponse(
             error=ErrorDetail(
                 code="DASHBOARD_CREATION_FAILED",
@@ -1025,7 +1000,7 @@ async def add_assets(request: Request):
                 }
             )
         except ValueError as ve:
-            logger.error(f"Invalid ID format: {ve}")
+            print(f"Invalid ID format: {ve}")
             return ErrorResponse(
                 error=ErrorDetail(
                     code="INVALID_ID_FORMAT",
@@ -1033,7 +1008,7 @@ async def add_assets(request: Request):
                 )
             )
         except Exception as db_error:
-            logger.error(f"Database error creating dashboard asset association: {db_error}")
+            print(f"Database error creating dashboard asset association: {db_error}")
             db.rollback()
             return ErrorResponse(
                 error=ErrorDetail(
@@ -1052,7 +1027,7 @@ async def add_assets(request: Request):
             )
         )
     except Exception as e:
-        logger.error(f"Error creating dashboard asset association: {e}")
+        print(f"Error creating dashboard asset association: {e}")
         return ErrorResponse(
             error=ErrorDetail(
                 code="DASHBOARD_ASSET_CREATION_FAILED",
@@ -1068,7 +1043,7 @@ async def add_assets(request: Request):
             )
         )
     except Exception as e:
-        logger.error(f"Error creating dashboard asset association: {e}")
+        print(f"Error creating dashboard asset association: {e}")
         return ErrorResponse(
             error=ErrorDetail(
                 code="DASHBOARD_ASSET_CREATION_FAILED",
@@ -1154,11 +1129,50 @@ async def list_assests(request: Request):
             )
         )
     except Exception as e:
-        logger.error(f"Error listing assets: {e}")
+        print(f"Error listing assets: {e}")
         return ErrorResponse(
             error=ErrorDetail(
                 code="LIST_ASSETS_FAILED",
                 message=f"Failed to list assets: {str(e)}"
+            )
+        )
+
+@app.post("/query")
+async def query_mcp(request: QueryRequest):
+    """Execute MCP query and return result"""
+    try:
+        result, chart_paths = await run_mcp_query(
+            query=request.query,
+            user_id=request.user_id,
+            max_steps=request.max_steps
+        )
+        
+        return SuccessResponse(
+            message="Query executed successfully",
+            data={
+                "result": result,
+                "chart_list": chart_paths
+            }
+        )
+        
+    except HTTPException as e:
+        # Extract error details from HTTPException
+        error_detail = e.detail
+        if isinstance(error_detail, dict) and "error" in error_detail:
+            return ErrorResponse(error=ErrorDetail(**error_detail["error"]))
+        else:
+            return ErrorResponse(
+                error=ErrorDetail(
+                    code="QUERY_EXECUTION_FAILED",
+                    message=str(error_detail)
+                )
+            )
+    except Exception as e:
+        print(f"Unexpected error in query endpoint: {e}")
+        return ErrorResponse(
+            error=ErrorDetail(
+                code="INTERNAL_SERVER_ERROR",
+                message=f"Unexpected error: {str(e)}"
             )
         )
 
@@ -1197,7 +1211,7 @@ async def query_mcp_get(
                 )
             )
     except Exception as e:
-        logger.error(f"Unexpected error in GET query endpoint: {e}")
+        print(f"Unexpected error in GET query endpoint: {e}")
         return ErrorResponse(
             error=ErrorDetail(
                 code="INTERNAL_SERVER_ERROR",
@@ -1219,5 +1233,5 @@ if __name__ == "__main__":
         "main:app",
         host=host,
         port=port,
-        reload=False,  # Disabled auto-reload to stop continuous file watching logs
+        reload=True,  # Disabled auto-reload to stop continuous file watching logs
     )
