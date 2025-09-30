@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime, Text
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime, Text, JSON
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -30,16 +30,13 @@ class Asset(Base):
     __tablename__ = "assets"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=True)
-    path = Column(String, nullable=False)
-    width = Column(Integer, nullable=True)
-    height = Column(Integer, nullable=True)
-    aspect_ratio = Column(Float, nullable=True)
     session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True)
     query = Column(String, nullable=True)
-    chart_data = Column(String, nullable=True)
-    chart_type = Column(String, nullable=True)
+    raw_json = Column(JSON, nullable=True)
+    chart_type = Column(JSON, nullable=True)
+    chart_data = Column(JSON, nullable=True)
+
 
     session = relationship("ChatSession", back_populates="assets")
     conversation = relationship("Conversation", back_populates="assets")
@@ -67,9 +64,9 @@ class DashboardAsset(Base):
 
 
 
-# # Create DB
-# engine = create_engine("sqlite:///chat_app.db", echo=True)
-# Base.metadata.create_all(engine)
+# Create DB
+engine = create_engine("sqlite:///chat_app.db", echo=True)
+Base.metadata.create_all(engine)
 
 # # Create session
 # Session = sessionmaker(bind=engine)

@@ -3,3 +3,5 @@
 .venv/*
 logs/*
 media/*
+google_search_console/service_account.json
+chat_app.db

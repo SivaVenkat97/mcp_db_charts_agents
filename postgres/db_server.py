@@ -113,17 +113,20 @@ def execute_sql(query: str, session_id: int, conversation_id: int, user_id: str 
     rows_affected = 0
     
     try:
-        logger.info(f"Executing query: {query}")
+        logger.info(f"&&&&&&&&&&&&&&&&&&&&&&&&& Executing query: {query}")
         results = db.execute_query(query)
         execution_time = time.time() - start_time
         rows_affected = len(results) if isinstance(results, list) else 0
         
-        logger.info(f"Results Data Type: {type(results)}")
+        logger.info(f"&&&&&&&&&&&&&&&&&&&&&&& Results Data Type: {results}")
         output_response = {}
         output_response["query"] = query
         output_response["results"] = results
+
+        logger.info("output_response1234567890: ", output_response)
         
         return json.dumps(output_response, default=str)
+
     except Exception as e:
         execution_time = time.time() - start_time
         status = "ERROR"

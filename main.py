@@ -202,74 +202,6 @@ async def get_chat_sessions():
             )
         )
 
-# @app.post("/conversations")
-# async def create_conversation(request: Request):
-#     """Create a new conversation with session_id and question"""
-#     try:
-#         # Parse JSON payload
-#         payload = await request.json()
-        
-#         # Validate required fields
-#         if "session_id" not in payload:
-#             return ErrorResponse(
-#                 error=ErrorDetail(
-#                     code="MISSING_SESSION_ID",
-#                     message="session_id is required in the payload"
-#                 )
-#             )
-        
-#         if "question" not in payload:
-#             return ErrorResponse(
-#                 error=ErrorDetail(
-#                     code="MISSING_QUESTION",
-#                     message="question is required in the payload"
-#                 )
-#             )
-        
-#         session_id = payload["session_id"]
-#         question = payload["question"]
-        
-#         # Validate session_id exists in database
-#         db = SessionLocal()
-#         try:
-#             chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-#             if not chat_session:
-#                 return ErrorResponse(
-#                     error=ErrorDetail(
-#                         code="SESSION_NOT_FOUND",
-#                         message=f"Chat session with ID {session_id} not found"
-#                     )
-#                 )
-#         finally:
-#             db.close()
-        
-#         # Process the question using MCP agent
-#         result, chart_paths = await run_mcp_query(
-#             query=question,
-#             user_id=None,
-#             max_steps=10
-#         )
-        
-#         return SuccessResponse(
-#             message="Conversation processed successfully",
-#             data={
-#                 "session_id": session_id,
-#                 "question": question,
-#                 "result": result,
-#                 "chart_list": chart_paths,
-#                 "timestamp": datetime.now().isoformat()
-#             }
-#         )
-        
-#     except Exception as e:
-#         print(f"Error processing conversation: {e}")
-#         return ErrorResponse(
-#             error=ErrorDetail(
-#                 code="CONVERSATION_PROCESSING_FAILED",
-#                 message=f"Failed to process conversation: {str(e)}"
-#             )
-#         )
-
 async def create_mcp_client_and_agent():
     """Create a new MCP client and agent instance"""
     global mcp_client, mcp_agent
@@ -279,19 +211,19 @@ async def create_mcp_client_and_agent():
         
         # Initialize MCP client with configuration
         config = {
-            "mcpServers": {            
-                "chart_server": {
-                    "command": "python",
-                    "args": ["mcp_chart.py"],
-                    "transport": {
-                        "type": "stdio"
-                    }
-                },
+            "mcpServers": {
                 "postgres_server": {
                     "command": "python",
                     "args": ["postgres/db_server.py"],
                     "transport": {
                         "type": "stdio"
+                    },
+                    "google_search_console_server": {
+                        "command": "python",
+                        "args": ["google_search_console/server.py"],
+                        "transport": {
+                            "type": "stdio"
+                        }
                     }
                 }
             }
@@ -302,92 +234,102 @@ async def create_mcp_client_and_agent():
         
         # Initialize LLM
         llm = ChatOpenAI(
-            model="gpt-4o", 
+            model="gpt-4o-mini", 
+            # model="gpt-4o", 
             api_key=os.getenv("OPENAI_API_KEY")
         )
         
         # System rules
         current_date = datetime.now().strftime("%Y-%m-%d")
-        system_rules = f"""
-        You are a chart generation assistant. You have access to tools for creating pie charts, bar charts, area charts, line charts, scatter charts, box plots, column charts, dual axis charts, funnel charts, radar charts, sankey charts, tree maps and managing chart images.
+        system_rules = """
+        You are a comprehensive business assistant with access to multiple MCP servers:  
 
-        Current Date: {current_date}
+        Postgres Database Rules:
+        1. Only use SELECT queries with execute_sql.
+        2. If the user asks about tables but not columns, prefer table_list.
+        3. If the user asks about structure/columns, prefer database_schema.
+        4. If you need schema of any table, use database_schema.
+        5. Never modify data (INSERT/UPDATE/DELETE not allowed).
 
-        Rules:
-        1. Only use tools provided by MCP discovery.
-        2. Never invent tool names — only use tools provided by MCP discovery.
-        3. Always return structured results from tools. Summarize only if the user specifically asks for a summary.
-        4. When users ask to generate pie charts, use the available chart generation tools.
-        5. The available tools are:
-        - pie_chart: Generate a pie chart from data and save it as PNG
-        - bar_chart: Generate a bar chart from data and save it as PNG
-        - area_chart: Generate an area chart from data and save it as PNG
-        - line_chart: Generate a line chart from data and save it as PNG
-        - scatter_chart: Generate a scatter chart from data and save it as PNG
-        - box_plot: Generate a box plot from data and save it as PNG
-        - column_chart: Generate a column chart from data and save it as PNG
-        - dual_axis_chart: Generate a dual axis chart from data and save it as PNG
-        - funnel_chart: Generate a funnel chart from data and save it as PNG
-        - radar_chart: Generate a radar chart from data and save it as PNG
-        - sankey_chart: Generate a sankey chart from data and save it as PNG
-        - tree_map: Generate a tree map from data and save it as PNG
-        - list_saved_charts: List all saved chart images
-        - get_charts_directory: Get the directory where the charts are saved
-        - hello_world: Verify the MCP server is responsive
-        - execute_sql: Execute a SQL query and return the result
-        - database_schema: Get the schema of the database
-        - table_list: Get the list of tables in the database
+        database output format:
+        {{
+            "sql_query": "<the SQL query>",
+            "raw_json": <the raw JSON array from the database>,
+        }}
 
-        Available Tools:
-        - pie_chart: Use for creating pie charts with data, title, and filename
-        - bar_chart: Use for creating horizontal bar charts with data, title, and filename
-        - area_chart: Use for creating area charts with data, title, and filename
-        - line_chart: Use for creating line charts with data, title, and filename
-        - scatter_chart: Use for creating scatter charts with data, title, and filename
-        - box_plot: Use for creating box plots with data, title, and filename
-        - column_chart: Use for creating column charts with data, title, and filename
-        - dual_axis_chart: Use for creating dual axis charts with data, title, and filename
-        - funnel_chart: Use for creating funnel charts with data, title, and filename
-        - radar_chart: Use for creating radar charts with data, title, and filename
-        - sankey_chart: Use for creating sankey charts with data, title, and filename
-        - tree_map: Use for creating tree maps with data, title, and filename
-        - list_saved_charts: Use for viewing all saved chart images
-        - get_charts_directory: Use for getting the directory where the charts are saved
-        - hello_world: Use for verifying the MCP server is responsive
-        - execute_sql: Use for executing a SQL query and returning the result
-        - database_schema: Use for getting the schema of the database
-        - table_list: Use for getting the list of tables in the database
+        Google Search Console Rules:
+        1. If the question relates to site performance, queries, clicks, impressions, or position, use the GSC tools.
+        2. If a site (property) is mentioned, you must provide the property ID in the format required (`sc-domain:example.com` or full URL).
+        3. For "top queries", "pages", or "countries", use the appropriate discovery tools (e.g., search_analytics).
+        4. Always return the raw data (clicks, impressions, CTR, position) unless the user requests a summary.
+        5. If unsure, first list available resources from the GSC server before attempting queries.
 
-        Chart Generation Guidelines:
-        - Always provide meaningful titles for charts
-        - Use descriptive filenames that reflect the chart content
-        - Ensure data is properly formatted as key-value pairs
-        - Consider using custom colors for better visual appeal
-        - When the user asks a question, always generate multiple relevant charts (not just one) to provide richer insights.
-        
-        NAMING CONVENTION RULES:
-        When the user asks for specific data (e.g., "Show me the list of cars produced in 2021 from the database, and generate all charts from the data"), follow this naming pattern:
-        
-        1. Extract the main subject/entity from the user's query (e.g., "cars produced in 2021")
-        2. For each chart type, create:
-           - Title: "[main subject]_[chart type name]" (e.g., "cars produced in 2021_pie chart", "cars produced in 2021_bar chart")
-           - Filename: "[main subject with underscores]_[chart type name with underscores].png" (e.g., "cars_produced_in_2021_pie_chart.png", "cars_produced_in_2021_bar_chart.png")
-        
-        3. Convert spaces to underscores in filenames, keep spaces in titles
-        4. Use lowercase for chart type names in filenames, title case for titles
-        5. Always include the .png extension in filenames
-        
-        Examples:
-        - Query: "cars produced in 2021" → Title: "cars produced in 2021_line chart", Filename: "cars_produced_in_2021_line_chart.png"
-        - Query: "sales data for Q4" → Title: "sales data for Q4_pie chart", Filename: "sales_data_for_q4_pie_chart.png"
-        - Query: "employee performance metrics" → Title: "employee performance metrics_scatter chart", Filename: "employee_performance_metrics_scatter_chart.png"
+            ## DIMENSION DETECTION RULES
+                Auto-detect dimensions from user queries:
+                - "by query" / "queries" / "search terms" / "keywords" → include "query"
+                - "by page" / "pages" / "URLs" / "landing pages" → include "page"
+                - "by country" / "countries" / mention of specific countries → include "country"
+                - "by device" / "mobile" / "desktop" / "tablet" / "device-wise" → include "device"
+                - "daily" / "day-wise" / "trends" / "by date" → include "date"
+                Multi-dimensional queries:
+                - "by query and device" → dimensions: ["query", "device"]
+                - "by page and country" → dimensions: ["page", "country"]
+                - "query performance by device" → dimensions: ["query", "device"]
+                - "country and device breakdown" → dimensions: ["country", "device"]
+                - "page + query + country" → dimensions: ["page", "query", "country"]
 
-        SQL Tool Usage:
-        - When calling execute_sql, if the user query includes session_id and conversation_id, include them in a leading SQL comment so the server can log them. Use exactly this format at the very beginning of the SQL (replace the numbers with the actual IDs):
-          /* session_id: 12, conversation_id: 34 */
-          Then write the SELECT statement on the next line. Example:
-          /* session_id: 12, conversation_id: 34 */
-          SELECT * FROM users LIMIT 5;
+        google search console output format:
+        {{
+            "query": "<the query>",
+            "clicks": "<the clicks>",
+            "impressions": "<the impressions>",
+            "CTR": "<the CTR>",
+            "position": "<the position>",
+        }}
+
+        Analyze the returned JSON and decide the compatibale chart type(s) for visualization:
+
+        - Use a **Line Chart** if the data represents a continuous trend over time (e.g., dates, months, years).
+            Example format:
+            [
+            {{ "product": "Laptop", "sales": 120 }},
+            ]
+        - Use a **Pie Chart** if the data represents proportions or categories of a whole (e.g., market share, funnel stages).
+            Example format:
+            [
+            {{ "stage": "Leads", "count": 1000 }},
+            ]
+        - Use a **Vertical Bar Chart** if the data compares discrete categories or groups (e.g., product sales, user signups per country).
+            Example format:
+            [
+            {{ "product": "Laptop", "sales": 120 }},
+            ]
+
+        Prepare a list of one or more chart JSON structures that best represent the given data.
+            Each element in the list must include:
+            - "type": the chart type (line_chart, pie_chart, vertical_bar_chart)
+            - "data": the chart-ready JSON following the formats above.
+
+        Final JSON output format:
+
+            {{
+            "sql_query": "<the SQL query>",
+            "raw_json": <the raw JSON array from the database>,
+            "charts": [
+                {{
+                "type": "<chart_type>",
+                "data": <chart_data_array>
+                }}
+            ]
+            }}
+
+        chart json format rules:
+        - Always think step by step before choosing chart type.
+        - If multiple chart formats are suitable, include all in the "charts" list.
+        - Preserve database column names in the chart data (do not rename them).
+        - Ensure the JSON output is strictly valid and parsable.
+        - Do not include explanations, text, or markdown outside this JSON.
+
         """
 
         
@@ -396,116 +338,10 @@ async def create_mcp_client_and_agent():
         print("mcp_agent: ", mcp_agent)
         
     except Exception as e:
-        print(f"Failed to create MCP client/agent: {e}")
+        print(f"Failed to create MCP client/agent: {traceback.format_exc()}")
         raise
 
-def extract_chart_paths_from_result(result: Any) -> list:
-    """Extract chart paths from MCP agent execution result"""
-    chart_paths = []
-    
-    if isinstance(result, str):
-        # Look for file paths in the result string
-        # Pattern to match file paths ending with .png
-        path_pattern = r'[^\s]+\.png'
-        matches = re.findall(path_pattern, result)
-        chart_paths.extend(matches)
-    
-    elif isinstance(result, list):
-        # If result is a list, check each item
-        for item in result:
-            if isinstance(item, str) and item.endswith('.png'):
-                chart_paths.append(item)
-            elif isinstance(item, dict):
-                # Look for path-like values in dictionaries
-                for value in item.values():
-                    if isinstance(value, str) and value.endswith('.png'):
-                        chart_paths.append(value)
-    
-    elif isinstance(result, dict):
-        # Look for path-like values in the dictionary
-        for value in result.values():
-            if isinstance(value, str) and value.endswith('.png'):
-                chart_paths.append(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, str) and item.endswith('.png'):
-                        chart_paths.append(item)
-    
-    # Convert absolute paths to relative paths for the media endpoint
-    relative_paths = []
-    for path in chart_paths:
-        if os.path.isabs(path):
-            # Convert absolute path to relative path from media directory
-            try:
-                relative_path = os.path.relpath(path, os.getcwd())
-                relative_paths.append(relative_path)
-            except ValueError:
-                # If conversion fails, use the original path
-                relative_paths.append(path)
-        else:
-            relative_paths.append(path)
-    
-    # Filter paths to only include those that start with "media"
-    media_paths = []
-    for path in relative_paths:
-        if path.startswith("media/"):
-            media_paths.append(path)
-    
-    return media_paths
 
-async def get_chart_files_from_media() -> list:
-    """Get all chart files from the media directory with detailed information"""
-    chart_info = []
-    try:
-        media_dir = "media"
-        if os.path.exists(media_dir):
-            for root, dirs, files in os.walk(media_dir):
-                for file in files:
-                    if file.endswith('.png'):
-                        full_path = os.path.join(root, file)
-                        relative_path = os.path.relpath(full_path, os.getcwd())
-                        
-                        # Get file size
-                        file_size = os.path.getsize(full_path)
-                        
-                        # Extract title from filename (remove extension and convert to title case)
-                        title = os.path.splitext(file)[0].replace('_', ' ').replace('-', ' ').title()
-                        
-                        # Get image dimensions using PIL
-                        try:
-                            with Image.open(full_path) as img:
-                                width, height = img.size
-                                # Calculate aspect ratio as a ratio string (e.g., "16:9")
-                                if height > 0:
-                                    # Find the greatest common divisor to simplify the ratio
-                                    def gcd(a, b):
-                                        while b:
-                                            a, b = b, a % b
-                                        return a
-                                    divisor = gcd(width, height)
-                                    width_ratio = width // divisor
-                                    height_ratio = height // divisor
-                                    aspect_ratio = f"{width_ratio}:{height_ratio}"
-                                else:
-                                    aspect_ratio = "1:1"
-                        except Exception as img_error:
-                            print(f"Could not get image dimensions for {file}: {img_error}")
-                            width, height = 0, 0
-                            aspect_ratio = "1:1"
-                        
-                        chart_info.append({
-                            "title": title,
-                            "path": relative_path,
-                            "size": file_size,
-                            "aspect_ratio": aspect_ratio,
-                            "width": f"{width}px",
-                            "height": f"{height}px"
-                        })
-    except Exception as e:
-        print(f"Error getting chart files: {e}")
-    
-    # Sort by filename
-    return sorted(chart_info, key=lambda x: x["path"])
 
 async def run_mcp_query(
         query: str,
@@ -535,68 +371,37 @@ async def run_mcp_query(
         
         print(f"Running MCP query: {user_query}")
 
-        # Get chart files before execution
-        charts_before = await get_chart_files_from_media()
-
-
         # Create fresh MCP client and agent for each request to avoid connection issues
         await create_mcp_client_and_agent()
         
         result = await mcp_agent.run(user_query, max_steps=max_steps)
-
+        print("result1234567890: ", result)
 
         print("="*100)
         print(f"Result: {result}")
         print("="*100)
-        
-        # Get chart files after execution
-        charts_after = await get_chart_files_from_media()
-        
-        # Find newly created charts
-        new_charts = []
-        charts_before_paths = {chart["path"] for chart in charts_before}
-        for chart in charts_after:
-            if chart["path"] not in charts_before_paths:
-                new_charts.append(chart)
+
         
 
-        return result, new_charts
+        return result
     except Exception as e:
         print(f"MCP query failed: {e}")
         # Try to recreate client and agent once more
         try:
             print("Attempting to recreate MCP client and agent...")
             await create_mcp_client_and_agent()
-            
-            # Get chart files before retry
-            charts_before_retry = await get_chart_files_from_media()
+
             
             result = await mcp_agent.run(user_query, max_steps=max_steps)
+            print("result111111111111: ", result)
             
-            # Get chart files after retry
-            charts_after_retry = await get_chart_files_from_media()
-            
-            # Find newly created charts from retry
-            new_charts = []
-            charts_before_retry_paths = {chart["path"] for chart in charts_before_retry}
-            for chart in charts_after_retry:
-                if chart["path"] not in charts_before_retry_paths:
-                    new_charts.append(chart)
-            
-            return result, new_charts
+
+            return result
         except Exception as retry_e:
+            print(f"MCP query retry failed: {retry_e}")
+            print(f"MCP query retry failed: {traceback.format_exc()}")
             raise retry_e
-            # print(f"MCP query retry failed: {retry_e}")
-            # raise HTTPException(
-            #     status_code=500, 
-            #     detail={
-            #         "status": False,
-            #         "error": {
-            #             "code": "QUERY_EXECUTION_FAILED",
-            #             "message": f"Query execution failed: {str(retry_e)}"
-            #         }
-            #     }
-            # )
+
 
 
 
@@ -604,57 +409,10 @@ async def run_mcp_query(
 async def create_conversation(request: Request):
     """Create a new conversation with session_id and question"""
     try:
-        # # Parse JSON payload
-        # try:
-        #     payload = await request.json()
-        # except json.JSONDecodeError as json_error:
-        #     print(f"Invalid JSON in request body: {json_error}")
-        #     return ErrorResponse(
-        #         error=ErrorDetail(
-        #             code="INVALID_JSON",
-        #             message="Invalid JSON payload. Please check the request body format."
-        #         )
-        #     )
-        
-        # # Validate required fields
-        # if "session_id" not in payload:
-        #     return ErrorResponse(
-        #         error=ErrorDetail(
-        #             code="MISSING_SESSION_ID",
-        #             message="session_id is required in the payload"
-        #         )
-        #     )
-        
-        # if "question" not in payload:
-        #     return ErrorResponse(
-        #         error=ErrorDetail(
-        #             code="MISSING_QUESTION",
-        #             message="question is required in the payload"
-        #         )
-        #     )
         payload = await request.json()
         session_id = payload["session_id"]
         question = payload["question"]
-        
-        # # Validate question is a string type
-        # if not isinstance(question, str):
-        #     return ErrorResponse(
-        #         error=ErrorDetail(
-        #             code="INVALID_QUESTION_TYPE",
-        #             message="please check the question type"
-        #         )
-        #     )
-        
-        # # Validate question is not empty
-        # if not question or not question.strip():
-        #     return ErrorResponse(
-        #         error=ErrorDetail(
-        #             code="EMPTY_QUESTION",
-        #             message="please provide the question"
-        #         )
-        #     )
-        
-        # Validate session_id exists in database
+
         db = SessionLocal()
         print("111111111111")
         chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
@@ -672,6 +430,7 @@ async def create_conversation(request: Request):
         max_steps = payload.get("max_steps", 10)
         print("333333333333")
 
+        # Create conversation entry first with just session_id
         conversation_obj = Conversation(session_id=session_id)
         db.add(conversation_obj)
         db.commit()
@@ -690,7 +449,7 @@ async def create_conversation(request: Request):
                 print("555555555555", conversation_obj.id)
                 
                 # Execute conversation
-                result, chart_paths = await run_mcp_query(
+                result = await run_mcp_query(
                     query=question,
                     user_id=user_id,
                     max_steps=max_steps,
@@ -698,77 +457,58 @@ async def create_conversation(request: Request):
                     conversation_id=conversation_obj.id
                 )
                 print("666666666666")
-                # Store conversation and assets in database
+                # Update the existing conversation record with question and response
                 db = SessionLocal()
                 print("777777777777")
                 try:
-                    # Create conversation record
-                    conversation = Conversation(
-                        question=question,
-                        response=str(result),
-                        session_id=session_id
-                    )
-                    db.add(conversation)
-                    db.commit()
-                    print("888888888888")
-                    # Store assets (charts) in database
-                    for chart in chart_paths:
-                        # Extract title from path
-                        title = os.path.splitext(os.path.basename(chart["path"]))[0].replace('_', ' ').replace('-', ' ').title()
-                        
-                        # Parse width and height from strings like "800px"
-                        width = None
-                        height = None
-                        aspect_ratio = None
-                        
-                        if chart.get("width") and chart.get("height"):
-                            try:
-                                # Extract numeric value from strings like "800px"
-                                width_str = str(chart["width"]).replace("px", "").strip()
-                                height_str = str(chart["height"]).replace("px", "").strip()
-                                
-                                width = int(width_str) if width_str.isdigit() else None
-                                height = int(height_str) if height_str.isdigit() else None
-                                
-                                # Calculate aspect ratio as float
-                                if width and height and height > 0:
-                                    aspect_ratio = float(width) / float(height)
-                                    
-                            except (ValueError, ZeroDivisionError) as e:
-                                print(f"Error parsing dimensions for {chart['path']}: {e}")
-                                width = None
-                                height = None
-                                aspect_ratio = None
-                        
-                        # If we couldn't parse from width/height, try to parse from aspect_ratio string like "1236:1025"
-                        if aspect_ratio is None and chart.get("aspect_ratio"):
-                            try:
-                                aspect_str = str(chart["aspect_ratio"])
-                                if ":" in aspect_str:
-                                    parts = aspect_str.split(":")
-                                    if len(parts) == 2:
-                                        w_ratio = int(parts[0].strip())
-                                        h_ratio = int(parts[1].strip())
-                                        if h_ratio > 0:
-                                            aspect_ratio = float(w_ratio) / float(h_ratio)
-                            except (ValueError, ZeroDivisionError) as e:
-                                print(f"Error parsing aspect ratio '{chart.get('aspect_ratio')}' for {chart['path']}: {e}")
-                                aspect_ratio = None
-                        
-                        # Create asset record
-                        asset = Asset(
-                            title=title,
-                            path=chart["path"],
-                            width=width,
-                            height=height,
-                            aspect_ratio=aspect_ratio,
-                            session_id=session_id,
-                            conversation_id=conversation.id
-                        )
-                        db.add(asset)
-
-
+                    # Re-query the conversation object in the new session
+                    conversation = db.query(Conversation).filter(Conversation.id == conversation_obj.id).first()
+                    if conversation:
+                        conversation.question = question
+                        conversation.response = str(result)
+                        db.commit()
+                        print("888888888888")
+                    else:
+                        print("Conversation not found in database")
+                       
+                    # Parse the result to extract SQL query and other data
+                    sql_query = None
+                    raw_json_data = None
+                    chart_data = None
+                    chart_type = None
                     
+                    try:
+                        # Try to parse the result as JSON
+                        if isinstance(result, str):
+                            result_json = json.loads(result)
+                            sql_query = result_json.get('sql_query', question) 
+                            raw_json_data = json.dumps(result_json.get('raw_json', result)) 
+                            
+                            # Extract chart data if available
+                            charts = result_json.get('charts', [])
+                            if charts:
+                                chart_data=json.dumps(charts)
+                                # Extract all chart types, not just the first one
+                                chart_types = [chart.get('type') for chart in charts if chart.get('type')]
+                                chart_type = ', '.join(chart_types) if chart_types else None
+                        else:
+                            sql_query = question
+                            raw_json_data = str(result)
+                    except (json.JSONDecodeError, AttributeError):
+                        # If parsing fails, use the original question and result
+                        sql_query = question
+                        raw_json_data = str(result)
+                    
+                    # Create asset record with extracted SQL query
+                    asset = Asset(
+                        session_id=session_id,
+                        conversation_id=conversation_obj.id,
+                        query=sql_query,
+                        raw_json=raw_json_data,
+                        chart_data=chart_data,
+                        chart_type=chart_type
+                    )
+                    db.add(asset)                
                     db.commit()
                     
                 except Exception as db_error:
@@ -784,7 +524,7 @@ async def create_conversation(request: Request):
                         "session_id": session_id,
                         "question": question,
                         "result": result,
-                        "chart_list": chart_paths,
+                        "chart_list": [],
                         "timestamp": datetime.now().isoformat()
                     }
                 )
@@ -803,7 +543,7 @@ async def create_conversation(request: Request):
                     )
                 yield f"data: {error_response.model_dump_json()}\n\n"
             except Exception as e:
-                print(f"Stream error: {e}")
+                print(f"Stream error: {traceback.format_exc()}")
                 error_response = ErrorResponse(
                     error=ErrorDetail(
                         code="INTERNAL_SERVER_ERROR",
@@ -1141,7 +881,7 @@ async def list_assests(request: Request):
 async def query_mcp(request: QueryRequest):
     """Execute MCP query and return result"""
     try:
-        result, chart_paths = await run_mcp_query(
+        result = await run_mcp_query(
             query=request.query,
             user_id=request.user_id,
             max_steps=request.max_steps
@@ -1151,7 +891,7 @@ async def query_mcp(request: QueryRequest):
             message="Query executed successfully",
             data={
                 "result": result,
-                "chart_list": chart_paths
+                # "chart_list": chart_paths
             }
         )
         
@@ -1184,7 +924,7 @@ async def query_mcp_get(
 ):
     """Execute MCP query via GET request"""
     try:
-        result, chart_paths = await run_mcp_query(
+        result = await run_mcp_query(
             query=query,
             user_id=user_id,
             max_steps=max_steps
@@ -1194,7 +934,7 @@ async def query_mcp_get(
             message="Query executed successfully",
             data={
                 "result": result,
-                "chart_list": chart_paths
+                # "chart_list": chart_paths
             }
         )
         
