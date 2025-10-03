@@ -5,3 +5,5 @@ logs/*
 media/*
 google_search_console/service_account.json
 chat_app.db
+nohup.out
+service_account.json

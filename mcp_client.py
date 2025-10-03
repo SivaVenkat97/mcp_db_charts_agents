@@ -21,68 +21,51 @@ async def main():
 
     config = {
         "mcpServers": {
-            "chart_server": {
+            "google_search_console_server": {
                 "command": "python",
-                "args": ["mcp_chart.py"],
+                "args": ["google_search_console/server.py"],
             }
         }
     }
 
     client = MCPClient.from_dict(config)
-    llm = ChatOpenAI(model="gpt-4o", api_key=os.getenv("OPENAI_API_KEY"))
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY"))
 
     system_rules = f"""
-    You are a chart generation assistant. You have access to tools for creating pie charts, bar charts, area charts, line charts, scatter charts, box plots, column charts, dual axis charts, funnel charts, radar charts, sankey charts, tree maps and managing chart images.
+        You are an MCP agent with access to the Google Search Console tools.
 
-    Current Date: {current_date}
+        CURRENT DATE: 30-09-2025
+        CURRENT MONTH: September 2025
+        CURRENT YEAR: 2025
+        CURRENT DAY: 30
 
-    Rules:
-    1. Only use tools provided by MCP discovery.
-    2. Never invent tool names — only use tools provided by MCP discovery.
-    3. Always return structured results from tools. Summarize only if the user specifically asks for a summary.
-    4. When users ask to generate pie charts, use the available chart generation tools.
-    5. The available tools are:
-       - pie_chart: Generate a pie chart from data and save it as PNG
-       - bar_chart: Generate a bar chart from data and save it as PNG
-       - area_chart: Generate an area chart from data and save it as PNG
-       - line_chart: Generate a line chart from data and save it as PNG
-       - scatter_chart: Generate a scatter chart from data and save it as PNG
-       - box_plot: Generate a box plot from data and save it as PNG
-       - column_chart: Generate a column chart from data and save it as PNG
-       - dual_axis_chart: Generate a dual axis chart from data and save it as PNG
-       - funnel_chart: Generate a funnel chart from data and save it as PNG
-       - radar_chart: Generate a radar chart from data and save it as PNG
-       - sankey_chart: Generate a sankey chart from data and save it as PNG
-       - tree_map: Generate a tree map from data and save it as PNG
-       - list_saved_charts: List all saved chart images
+         Google Search Console Rules:
+         1. If the question relates to site performance, queries, clicks, impressions, or position, use the GSC tools.
+         2. If a site (property) is mentioned, you must provide the property ID in the format required (`sc-domain:example.com` or full URL).
+         3. For "top queries", "pages", or "countries", use the appropriate discovery tools (e.g., search_analytics).
+         4. Always return the raw data (clicks, impressions, CTR, position) unless the user requests a summary.
+         5. If unsure, first list available resources from the GSC server before attempting queries.
 
-    Available Tools:
-    - pie_chart: Use for creating pie charts with data, title, and filename
-    - bar_chart: Use for creating horizontal bar charts with data, title, and filename
-    - area_chart: Use for creating area charts with data, title, and filename
-    - line_chart: Use for creating line charts with data, title, and filename
-    - scatter_chart: Use for creating scatter charts with data, title, and filename
-    - box_plot: Use for creating box plots with data, title, and filename
-    - column_chart: Use for creating column charts with data, title, and filename
-    - dual_axis_chart: Use for creating dual axis charts with data, title, and filename
-    - funnel_chart: Use for creating funnel charts with data, title, and filename
-    - radar_chart: Use for creating radar charts with data, title, and filename
-    - sankey_chart: Use for creating sankey charts with data, title, and filename
-    - tree_map: Use for creating tree maps with data, title, and filename
-    - list_saved_charts: Use for viewing all saved chart images
-
-    Chart Generation Guidelines:
-    - Always provide meaningful titles for charts
-    - Use descriptive filenames that reflect the chart content
-    - Ensure data is properly formatted as key-value pairs
-    - Consider using custom colors for better visual appeal
+            ##  DIMENSION DETECTION RULES
+                 Auto-detect dimensions from user queries:
+                 - "by query" / "queries" / "search terms" / "keywords" → include "query"
+                 - "by page" / "pages" / "URLs" / "landing pages" → include "page"
+                 - "by country" / "countries" / mention of specific countries → include "country"
+                 - "by device" / "mobile" / "desktop" / "tablet" / "device-wise" → include "device"
+                 - "daily" / "day-wise" / "trends" / "by date" → include "date"
+                 Multi-dimensional queries:
+                 - "by query and device" → dimensions: ["query", "device"]
+                 - "by page and country" → dimensions: ["page", "country"]
+                 - "query performance by device" → dimensions: ["query", "device"]
+                 - "country and device breakdown" → dimensions: ["country", "device"]
+                 - "page + query + country" → dimensions: ["page", "query", "country"]
     
     """
 
     agent = MCPAgent(llm=llm, client=client, max_steps=5, system_prompt=system_rules)
 
     result = await agent.run(
-        "Generate a treemap of world population by continent with labels Asia, Africa, Europe, North America, South America, Oceania and values 4600, 1400, 750, 600, 430, 42",
+        "Which search terms are trending compared to last month?",
         max_steps=10,
     )
     print("Result:", result)

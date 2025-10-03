@@ -31,6 +31,7 @@ class GSCAuthenticator:
             if not self.service:
                 if not self.credentials:
                     self.authenticate()
+                # Use standard Google API service
                 self.service = build("searchconsole", "v1", credentials=self.credentials)
         except Exception as e:
             print(e)

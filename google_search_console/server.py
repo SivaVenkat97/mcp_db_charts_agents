@@ -18,6 +18,8 @@ Authentication is handled via service account credentials stored in a JSON file.
 
 import logging
 import sys
+import json
+import urllib.parse
 from typing import Any, Dict, List, Optional
 
 from domain import (
@@ -31,8 +33,16 @@ from mcp.server.fastmcp import FastMCP
 
 load_dotenv()
 
-logger = logging.getLogger("gsc_mcp_server")
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+# Configure logging to both file and console
+logging.basicConfig(
+    level=logging.DEBUG, 
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("gsc_mcp_server.log"),
+        logging.StreamHandler(sys.stdout)  # Also print to console
+    ]
+)
+logger = logging.getLogger(__name__)
 
 SERVICE_ACCOUNT_FILE = "service_account.json"  # adjust path if needed
 PROPERTY_URL = "https://episyche.com/"
@@ -41,6 +51,60 @@ PROPERTY_URL = "https://episyche.com/"
 
 # Create the server
 mcp = FastMCP("Google Search Console MCP Server", host="0.0.0.0")
+
+
+def print_curl_command(url: str, method: str = "GET", headers: Dict = None, 
+                      body: Any = None, access_token: str = None):
+    """
+    Print a curl command for debugging purposes
+    """
+    logger.info("="*80)
+    logger.info("🌐 CURL COMMAND")
+    logger.info("="*80)
+    
+    # Build curl command
+    curl_parts = ["curl"]
+    
+    # Add method
+    if method.upper() != "GET":
+        curl_parts.append(f"-X {method.upper()}")
+    
+    # Add headers
+    if headers:
+        for key, value in headers.items():
+            curl_parts.append(f'-H "{key}: {value}"')
+    
+    # Add authorization header if token provided
+    if access_token:
+        curl_parts.append(f'-H "Authorization: Bearer {access_token}"')
+    
+    # Add body for POST/PUT/PATCH requests
+    if body and method.upper() in ["POST", "PUT", "PATCH"]:
+        if isinstance(body, (dict, list)):
+            body_str = json.dumps(body)
+        else:
+            body_str = str(body)
+        curl_parts.append(f'-d \'{body_str}\'')
+    
+    # Add URL
+    curl_parts.append(f'"{url}"')
+    
+    curl_command = " ".join(curl_parts)
+    
+    logger.info(f"📡 CURL COMMAND:")
+    logger.info(f"   {curl_command}")
+    logger.info(f"🔗 URL: {url}")
+    logger.info(f"📋 METHOD: {method.upper()}")
+    
+    if body:
+        logger.info(f"📦 BODY:")
+        if isinstance(body, (dict, list)):
+            logger.info(f"   {json.dumps(body, indent=2)}")
+        else:
+            logger.info(f"   {body}")
+    
+    logger.info("="*80)
+    return curl_command
 
 
 @mcp.resource(name="Valid Country Codes", uri="gsc://country_codes")
@@ -69,14 +133,25 @@ def list_sites() -> list[str]:
         of all sites the account has access to.
     """
     try:
+        logger.info("="*80)
+        logger.info("🔍 GOOGLE SEARCH CONSOLE API CALL: list_sites")
+        logger.info("="*80)
         logger.info("Executing list_sites tool")
         s = GSCSiteData(service_account_file=SERVICE_ACCOUNT_FILE, property_url=PROPERTY_URL)
+        logger.info("s: %s", s)
+        logger.info("📡 Making API request to Google Search Console...")
+        
         raw = s.list_of_sites()
+        logger.info("📊 API Response received:")
+        logger.info("Raw response: %s", raw)
+        logger.info("raw: %s", raw)
         sites = [entry["siteUrl"] for entry in raw.get("siteEntry", [])]
+        logger.info("✅ Found %d sites: %s", len(sites), sites)
         logger.info("Found %d sites", len(sites))
+        logger.info("="*80)
         return sites
     except Exception as e:
-        logger.error("Error in list_sites: %s", e)
+        logger.error(f"Error in list_sites: {e}", exc_info=True)
         return []
 
 
@@ -94,10 +169,18 @@ def site_info() -> dict:
         Returns raw JSON response from the Google Search Console API.
     """
     try:
+        logger.info("="*80)
+        logger.info("🔍 GOOGLE SEARCH CONSOLE API CALL: site_info")
+        logger.info("="*80)
         s = GSCSiteData(service_account_file=SERVICE_ACCOUNT_FILE, property_url=PROPERTY_URL)
         logger.info("Executing site_info tool for %s", s.site_url)
+        logger.info("📡 Making API request for site: %s", s.site_url)
+        
         result = s.site_info()
+        logger.info("📊 API Response received:")
+        logger.info("Site info: %s", result)
         logger.info("Retrieved site info for %s", s.site_url)
+        logger.info("="*80)
         return result
     except Exception as e:
         logger.error("Error in site_info: %s", e)
@@ -242,8 +325,39 @@ def search_analytics(
         Use start_row and row_limit for pagination through large datasets.
     """
     try:
+        logger.info("="*80)
+        logger.info("🔍 GOOGLE SEARCH CONSOLE API CALL: search_analytics")
+        logger.info("="*80)
         sa = GSCSearchAnalytics(service_account_file=SERVICE_ACCOUNT_FILE, property_url=PROPERTY_URL)
         logger.info("Executing search_analytics for %s", sa.site_url)
+        logger.info("📡 Making API request for site: %s", sa.site_url)
+        logger.info("📋 Request parameters:")
+        logger.info("   - Start date: %s", start_date)
+        logger.info("   - End date: %s", end_date)
+        logger.info("   - Dimensions: %s", dimensions)
+        logger.info("   - Row limit: %s", row_limit)
+        logger.info("   - Search type: %s", search_type)
+
+        # Print curl command for debugging
+        request_body = {
+            "startDate": start_date or "2025-01-01",
+            "endDate": end_date or "2025-10-01", 
+            "dimensions": dimensions or ["QUERY"],
+            "rowLimit": row_limit
+        }
+        
+        # Construct the API endpoint URL
+        encoded_site_url = urllib.parse.quote(sa.site_url, safe='')
+        api_url = f"https://searchconsole.googleapis.com/webmasters/v3/sites/{encoded_site_url}/searchAnalytics/query"
+        
+        # Print the curl command
+        print_curl_command(
+            url=api_url,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+            body=request_body,
+            access_token="YOUR_ACCESS_TOKEN"
+        )
 
         result = sa.query(
             start_date=start_date,
@@ -257,7 +371,12 @@ def search_analytics(
             search_type=search_type,
         )
 
+        logger.info("📊 API Response received:")
+        logger.info("   - Number of rows: %d", len(result))
+        logger.info("   - Sample data: %s", result[:3] if result else 'No data')
         logger.info("Retrieved %d rows of search analytics for %s", len(result), sa.site_url)
+        logger.info("="*80)
+        
         return result
 
     except Exception as e:
@@ -288,8 +407,15 @@ def get_total_metrics(
         Useful for getting overall site performance metrics.
     """
     try:
+        logger.info("="*80)
+        logger.info("🔍 GOOGLE SEARCH CONSOLE API CALL: get_total_metrics")
+        logger.info("="*80)
         sa = GSCSearchAnalytics(service_account_file=SERVICE_ACCOUNT_FILE, property_url=PROPERTY_URL)
         logger.info("Executing get_total_metrics for %s", sa.site_url)
+        logger.info("📡 Making API request for site: %s", sa.site_url)
+        logger.info("📋 Request parameters:")
+        logger.info("   - Start date: %s", start_date)
+        logger.info("   - End date: %s", end_date)
 
         result = sa.get_total_metrics(
             start_date=start_date,
@@ -297,7 +423,10 @@ def get_total_metrics(
             dimension_filter_groups=dimension_filter_groups,
         )
 
+        logger.info("📊 API Response received:")
+        logger.info("Total metrics: %s", result)
         logger.info("Retrieved total metrics for %s", sa.site_url)
+        logger.info("="*80)
         return result
 
     except Exception as e:
@@ -330,8 +459,16 @@ def get_top_queries(
         Useful for identifying the most valuable search terms driving traffic.
     """
     try:
+        logger.info("="*80)
+        logger.info("🔍 GOOGLE SEARCH CONSOLE API CALL: get_top_queries")
+        logger.info("="*80)
         sa = GSCSearchAnalytics(service_account_file=SERVICE_ACCOUNT_FILE, property_url=PROPERTY_URL)
         logger.info("Executing get_top_queries for %s", sa.site_url)
+        logger.info("📡 Making API request for site: %s", sa.site_url)
+        logger.info("📋 Request parameters:")
+        logger.info("   - Start date: %s", start_date)
+        logger.info("   - End date: %s", end_date)
+        logger.info("   - Limit: %s", limit)
 
         result = sa.get_top_queries(
             start_date=start_date,
@@ -340,7 +477,11 @@ def get_top_queries(
             dimension_filter_groups=dimension_filter_groups,
         )
 
+        logger.info("📊 API Response received:")
+        logger.info("   - Number of queries: %d", len(result))
+        logger.info("   - Top queries: %s", result[:3] if result else 'No data')
         logger.info("Retrieved %d top queries for %s", len(result), sa.site_url)
+        logger.info("="*80)
         return result
 
     except Exception as e:
@@ -373,8 +514,16 @@ def get_top_pages(
         Useful for identifying the most valuable pages driving organic search traffic.
     """
     try:
+        logger.info("="*80)
+        logger.info("🔍 GOOGLE SEARCH CONSOLE API CALL: get_top_pages")
+        logger.info("="*80)
         sa = GSCSearchAnalytics(service_account_file=SERVICE_ACCOUNT_FILE, property_url=PROPERTY_URL)
         logger.info("Executing get_top_pages for %s", sa.site_url)
+        logger.info("📡 Making API request for site: %s", sa.site_url)
+        logger.info("📋 Request parameters:")
+        logger.info("   - Start date: %s", start_date)
+        logger.info("   - End date: %s", end_date)
+        logger.info("   - Limit: %s", limit)
 
         result = sa.get_top_pages(
             start_date=start_date,
@@ -383,7 +532,11 @@ def get_top_pages(
             dimension_filter_groups=dimension_filter_groups,
         )
 
+        logger.info("📊 API Response received:")
+        logger.info("   - Number of pages: %d", len(result))
+        logger.info("   - Top pages: %s", result[:3] if result else 'No data')
         logger.info("Retrieved %d top pages for %s", len(result), sa.site_url)
+        logger.info("="*80)
         return result
 
     except Exception as e:
@@ -435,7 +588,8 @@ def main():
     """
     try:
         logger.info("Starting GSC MCP Server…")
-        mcp.run(transport="streamable-http")
+        # mcp.run(transport="streamable-http")
+        mcp.run()
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:

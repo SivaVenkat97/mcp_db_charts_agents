@@ -85,21 +85,17 @@ def table_list():
 
 
 @mcp.tool(name="execute_sql")
-def execute_sql(query: str, session_id: int, conversation_id: int, user_id: str = None) -> str:
+def execute_sql(query: str) -> str:
     """Execute a SQL query on the database.
 
     Args:
         query: The SQL query to execute
-        session_id: The session ID
-        conversation_id: The conversation ID
-        user_id: The user ID
+
 
     Returns:
         JSON string containing the query results
     """
-    logger.info("1111111111111session_id: ", session_id)
-    logger.info("2222222222222222conversation_id: ", conversation_id)
-    logger.info("33333333333333333333333333333user_id: ", user_id)
+
     if not query or not query.strip():
         raise ValueError("Query cannot be empty")
 
@@ -133,6 +129,16 @@ def execute_sql(query: str, session_id: int, conversation_id: int, user_id: str 
         error_message = str(e)
         
         logger.error(f"Query execution failed: {e}")
+        
+        # Return error response as JSON string
+        error_response = {
+            "query": query,
+            "results": [],
+            "error": error_message,
+            "status": status,
+            "execution_time": execution_time
+        }
+        return json.dumps(error_response, default=str)
 
 
 if __name__ == "__main__":

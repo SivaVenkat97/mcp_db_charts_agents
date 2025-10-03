@@ -127,7 +127,7 @@ async def root():
     return SuccessResponse(
         message="MCP HTTP Server is running",
         data={
-            "timestamp": datetime.now().strftime("%Y-%m-%d"),
+            "timestamp": datetime.now().isoformat(),
             "available_endpoints": [
                 "/query",
                 "/query/stream",
@@ -162,7 +162,7 @@ async def health_check():
             data={
                 "mcp_client_initialized": True,
                 "mcp_agent_initialized": True,
-                "timestamp": datetime.now().strftime("%Y-%m-%d")
+                "timestamp": datetime.now().isoformat()
             }
         )
     else:
@@ -189,7 +189,7 @@ async def get_chat_sessions():
             message="Chat session created successfully",
             data={
                 "session_id": new_session.id,
-                "created_at": datetime.now().strftime("%Y-%m-%d")
+                "created_at": datetime.now().isoformat()
             }
         )
         
@@ -252,8 +252,6 @@ async def create_mcp_client_and_agent():
         3. If the user asks about structure/columns, prefer database_schema.
         4. If you need schema of any table, use database_schema.
         5. Never modify data (INSERT/UPDATE/DELETE not allowed).
-        6. For datetime/date columns, use DATE() function to format as YYYY-MM-DD (e.g., DATE(created_at) AS created_date).
-        7. Always format datetime columns to show only the date part in YYYY-MM-DD format.
 
         database output format:
         {{{{
@@ -266,7 +264,7 @@ async def create_mcp_client_and_agent():
         - Use a **Line Chart** if the data represents a continuous trend over time (e.g., dates, months, years).
             Example format:
             [
-            {{{{"date": "2025-03-01", "sales": 120}}}},
+            {{{{"product": "Laptop", "sales": 120}}}},
             ]
         - Use a **Pie Chart** if the data represents proportions or categories of a whole (e.g., market share, funnel stages).
             Example format:
@@ -304,8 +302,6 @@ async def create_mcp_client_and_agent():
         - Preserve database column names in the chart data (do not rename them).
         - Ensure the JSON output is strictly valid and parsable.
         - Do not include explanations, text, or markdown outside this JSON.
-        - For datetime columns in chart data, format them as YYYY-MM-DD (e.g., "2025-03-01" not "2025-03-01 00:00:00+00:00").
-        - Use DATE() function in SQL queries to format datetime columns properly.
 
         """
 
@@ -410,7 +406,7 @@ async def create_conversation(request: Request):
         
         # Get optional parameters
         user_id = payload.get("user_id")
-        max_steps = payload.get("max_steps", 20)
+        max_steps = payload.get("max_steps", 10)
         print("333333333333")
 
         # Create conversation entry first with just session_id
@@ -418,13 +414,14 @@ async def create_conversation(request: Request):
         db.add(conversation_obj)
         db.commit()
         print("conversation_obj: ", conversation_obj.id)
+        print("444444444444")
       
         async def generate_stream():
             try:
                 # Send initial status
                 status_response = SuccessResponse(
                     message="Starting conversation...",
-                    data={"timestamp": datetime.now().strftime("%Y-%m-%d")}
+                    data={"timestamp": datetime.now().isoformat()}
                 )
                 yield f"data: {status_response.model_dump_json()}\n\n"
 
@@ -595,7 +592,7 @@ async def create_dashboard(request: Request):
                 data={
                     "dashboard_id": dashboard.id,
                     "title": dashboard.title,
-                    "created_at": datetime.now().strftime("%Y-%m-%d")
+                    "created_at": datetime.now().isoformat()
                 }
             )
         except Exception as db_error:
@@ -720,7 +717,7 @@ async def add_assets(request: Request):
                     "association_id": dashboard_asset.id,
                     "dashboard_id": dashboard_asset.dashboard_id,
                     "asset_id": dashboard_asset.asset_id,
-                    "created_at": datetime.now().strftime("%Y-%m-%d")
+                    "created_at": datetime.now().isoformat()
                 }
             )
         except ValueError as ve:

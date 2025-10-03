@@ -36,6 +36,7 @@ class Asset(Base):
     raw_json = Column(JSON, nullable=True)
     chart_type = Column(JSON, nullable=True)
     chart_data = Column(JSON, nullable=True)
+    curl_command = Column(String, nullable=True)
 
 
     session = relationship("ChatSession", back_populates="assets")
